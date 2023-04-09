@@ -3,6 +3,9 @@ class HtmlTable {
     #colNumMap;
     #colDom2colData;
     #colData2colDom;
+    #rowDom2rowData;
+    #rowData2rowDom;
+    #rowIdxs;
     #colNames;
     #data;
     #elemTable;
@@ -13,6 +16,7 @@ class HtmlTable {
     constructor(element, data) {
         this.#htmlSettings = {
             showHeader: false,
+            showfilters: false,
             classes: {},
         };
         this.#transposeData(data)
@@ -82,6 +86,54 @@ class HtmlTable {
             }
         }
 
+        return this;
+    }
+
+    showFilters(show=true) {
+        if (show && !this.#htmlSettings.showFilters) {
+            const elemRow = document.createElement('tr');
+            const table = this;
+            for (let i=0; i<this.#htmlSettings.colOrder.length; i++) {
+                const elemInput = document.createElement('input');
+                elemInput.type = 'text';
+                elemInput.className = 'js-filter';
+                elemInput.setAttribute('col', i);
+                elemInput.onkeyup = function() {
+                    const colNum = Number(this.getAttribute('col'));
+                    table.filterByDomColNumber(colNum, this.value);
+                };
+
+                const elemCell = document.createElement('td')
+                elemCell.append(elemInput);
+                elemRow.append(elemCell);
+            }
+
+            this.#elemHeader.append(elemRow);
+            this.#htmlSettings.showFilters = true;
+        }
+
+        if (!show && this.#htmlSettings.showFilters) {
+            this.#elemHeader.removeChild(this.#elemHeader.lastChild);
+            this.#htmlSettings.showFilters = false;
+        }
+    }
+
+    filterByDomColNumber(colNum, filterText) {
+        const colData = this.#colDom2colData[colNum];
+        let rowDomInsert = 0;
+        for (const i of this.#rowIdxs) {
+            let needsShown = this.#data[i][colData].toString().includes(filterText);
+            let isHidden = this.#rowData2rowDom[i] == null;
+
+            if (needsShown && isHidden) {
+                this.#elemBody.children[i].style.display = '';
+                this.#rowData2rowDom[i] = i;
+            }
+            if (!needsShown && !isHidden) {
+                this.#elemBody.children[i].style.display = 'none';
+                this.#rowData2rowDom[i] = null;
+            }
+        }
         return this;
     }
 
@@ -158,7 +210,13 @@ class HtmlTable {
         this.#colNumMap = {};
         this.#colDom2colData = {};
         this.#colData2colDom = [];
+        this.#rowDom2rowData = {};
+        this.#rowData2rowDom = [];
+        this.#rowIdxs = [];
         for (let i = 0; i < data.length; i++) {
+            this.#rowDom2rowData[i] = i;
+            this.#rowData2rowDom[i] = i;
+            this.#rowIdxs.push(i);
             this.#data.push([]);
             let colNum = 0;
             for (const key of Object.keys(data[i])) {
@@ -182,7 +240,8 @@ var t;
 window.onload = function() {
     t = new HtmlTable('#tbl', dataTable);
     t.setColOrder(['c', 'b'])
-        .addClass({'td': 'red', 0: 'ok', table: 'formated'});
+        .addClass({'td': 'red', 0: 'ok', table: 'formated'})
+        .showFilters();
 };
 
 
