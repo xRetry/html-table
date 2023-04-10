@@ -1,9 +1,7 @@
 
 class HtmlTable {
     #colNumMap;
-    #colDom2colData;
     #colData2colDom;
-    #rowDom2rowData;
     #rowData2rowDom;
     #rowIdxs;
     #colNames;
@@ -63,6 +61,7 @@ class HtmlTable {
 
     setColOrder(colOrder) {
         this.#htmlSettings.colOrder = colOrder;
+
         this.#buildTable();
         return this;
     }
@@ -78,11 +77,12 @@ class HtmlTable {
             const colIdx = this.#colNumMap[colName];
             if (colIdx == null) continue;
 
-            const colDom = this.#colData2colDom[colIdx];
+            let colDom = this.#colData2colDom[colIdx];
             if (colDom == null) continue;
 
             for (let i=0; i<this.#elemTable.children.length; i++) {
                 this.#elemTable.children[i].children[colDom].remove();
+                this.#colData2colDom[colIdx] = null;
             }
         }
 
@@ -93,14 +93,16 @@ class HtmlTable {
         if (show && !this.#htmlSettings.showFilters) {
             const elemRow = document.createElement('tr');
             const table = this;
-            for (let i=0; i<this.#htmlSettings.colOrder.length; i++) {
+            for (let colDom=0; colDom<this.#htmlSettings.colOrder.length; colDom++) {
+                const colData = Number(this.#elemBody.children[0].children[colDom].getAttribute('col'));
+
                 const elemInput = document.createElement('input');
                 elemInput.type = 'text';
                 elemInput.className = 'js-filter';
-                elemInput.setAttribute('col', i);
+                elemInput.setAttribute('col', colData);
                 elemInput.onkeyup = function() {
                     const colNum = Number(this.getAttribute('col'));
-                    table.filterByDomColNumber(colNum, this.value);
+                    table.filterColData(colNum, this.value);
                 };
 
                 const elemCell = document.createElement('td')
@@ -118,11 +120,9 @@ class HtmlTable {
         }
     }
 
-    filterByDomColNumber(colNum, filterText) {
-        const colData = this.#colDom2colData[colNum];
-        let rowDomInsert = 0;
+    filterColData(colNum, filterText) {
         for (const i of this.#rowIdxs) {
-            let needsShown = this.#data[i][colData].toString().includes(filterText);
+            let needsShown = this.#data[i][colNum].toString().includes(filterText);
             let isHidden = this.#rowData2rowDom[i] == null;
 
             if (needsShown && isHidden) {
@@ -135,6 +135,12 @@ class HtmlTable {
             }
         }
         return this;
+
+    }
+
+    filterCol(colNum, filterText) {
+        const colData = this.#elemBody.children[0].children[colNum].getAttribute('col');
+        this.filterColData(colData, filterText);
     }
 
     #bindToParent(element) {
@@ -155,28 +161,34 @@ class HtmlTable {
 
         const showHeader = this.#htmlSettings.showHeader;
         this.#htmlSettings.showHeader = false;
+        const showFilters = this.#htmlSettings.showFilters;
+        this.#htmlSettings.showFilters = false;
+
+        for (let i=0; i<this.#colData2colDom.length; i++) this.#colData2colDom[i] = null;
 
         for (let i = 0; i < this.#data.length; i++) {
             let elemRow = document.createElement('tr');
-            let j = 0;
+            let colDom = 0;
             for (const colName of this.#htmlSettings.colOrder) {
                 const colData = this.#colNumMap[colName];
                 if (colData == null) continue;
 
-                this.#colDom2colData[j] = colData;
-                this.#colData2colDom[colData] = j;
+                this.#colData2colDom[colData] = colDom;
 
                 const elemCell = document.createElement('td');
+                elemCell.setAttribute('row', i);
+                elemCell.setAttribute('col', colData);
                 const elemContent = document.createTextNode(this.#data[i][colData]);
                 elemCell.append(elemContent);
                 elemRow.append(elemCell);
-                j++;
+                colDom++;
             }
 
             this.#elemBody.append(elemRow);
         }
         this.showHeader(showHeader);
         this.#applyClasses();
+        this.showFilters(showFilters);
     }
 
     #applyClasses() {
@@ -208,19 +220,15 @@ class HtmlTable {
         this.#colNames = Object.keys(data[0]);
         this.#data = [];
         this.#colNumMap = {};
-        this.#colDom2colData = {};
         this.#colData2colDom = [];
-        this.#rowDom2rowData = {};
         this.#rowData2rowDom = [];
         this.#rowIdxs = [];
         for (let i = 0; i < data.length; i++) {
-            this.#rowDom2rowData[i] = i;
             this.#rowData2rowDom[i] = i;
             this.#rowIdxs.push(i);
             this.#data.push([]);
             let colNum = 0;
             for (const key of Object.keys(data[i])) {
-                this.#colDom2colData[colNum] = colNum;
                 this.#colData2colDom[colNum] = colNum;
                 this.#colNumMap[key] = colNum++;
                 this.#data[i].push(data[i][key]);
